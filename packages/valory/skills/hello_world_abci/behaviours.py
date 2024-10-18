@@ -190,10 +190,12 @@ class PrintMessageBehaviour(HelloWorldABCIBaseBehaviour, ABC):
             == self.synchronized_data.most_voted_keeper_address
         ):
             message = self.params.hello_world_string
+            owner = self.params.owner_address_string
         else:
             message = ":|"
+            owner = ":|"
 
-        printed_message = f"Agent {self.context.agent_name} (address {self.context.agent_address}) in period {self.synchronized_data.period_count} says: {message}"
+        printed_message = f"Agent {self.context.agent_name} (address {self.context.agent_address}) in period {self.synchronized_data.period_count} says: {message}, owner's address is {owner}"
 
         print(printed_message)
         self.context.logger.info(f"printed_message={printed_message}")
