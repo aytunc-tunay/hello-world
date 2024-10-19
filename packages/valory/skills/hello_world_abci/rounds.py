@@ -39,6 +39,7 @@ from packages.valory.skills.hello_world_abci.payloads import (
     RegistrationPayload,
     ResetPayload,
     SelectKeeperPayload,
+    PrintCountPayload,
 )
 
 
@@ -69,6 +70,11 @@ class SynchronizedData(
             List[str],
             self.db.get_strict("printed_messages"),
         )
+
+    @property
+    def print_count(self) -> int:
+        """Get the print count."""
+        return cast(int, self.db.get("print_count", 0))
 
 
 class HelloWorldABCIAbstractRound(AbstractRound, ABC):
@@ -146,6 +152,29 @@ class PrintMessageRound(CollectDifferentUntilAllRound, HelloWorldABCIAbstractRou
             return synchronized_data, Event.DONE
         return None
 
+class PrintCountRound(CollectSameUntilThresholdRound, HelloWorldABCIAbstractRound):
+    """A round in which all agents print the count of PrintMessageRound"""
+
+    payload_class = PrintCountPayload
+    synchronized_data_class = SynchronizedData
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
+        """Process the end of the block."""
+        if self.threshold_reached:
+            current_count = self.synchronized_data.print_count
+            updated_count = current_count + 1
+            
+            # Update the synchronized data with the new count
+            synchronized_data = self.synchronized_data.update(
+                print_count=updated_count,
+                synchronized_data_class=SynchronizedData,
+            )
+            
+            return synchronized_data, Event.DONE
+        
+        return None
+
+
 
 class ResetAndPauseRound(CollectSameUntilThresholdRound, HelloWorldABCIAbstractRound):
     """A round that represents that consensus is reached (the final round)"""
@@ -157,7 +186,11 @@ class ResetAndPauseRound(CollectSameUntilThresholdRound, HelloWorldABCIAbstractR
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            return self.synchronized_data.create(), Event.DONE
+            synchronized_data = self.synchronized_data.update(
+                print_count=self.synchronized_data.print_count,
+                synchronized_data_class=SynchronizedData,
+            )
+            return self.synchronized_data, Event.DONE
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
@@ -218,6 +251,10 @@ class HelloWorldAbciApp(AbciApp[Event]):
             Event.ROUND_TIMEOUT: RegistrationRound,
         },
         PrintMessageRound: {
+            Event.DONE: PrintCountRound,
+            Event.ROUND_TIMEOUT: RegistrationRound,
+        },
+        PrintCountRound: {
             Event.DONE: ResetAndPauseRound,
             Event.ROUND_TIMEOUT: RegistrationRound,
         },
