@@ -34,6 +34,7 @@ from packages.valory.skills.hello_world_abci.payloads import (
     RegistrationPayload,
     ResetPayload,
     SelectKeeperPayload,
+    PrintCountPayload,
 )
 from packages.valory.skills.hello_world_abci.rounds import (
     CollectRandomnessRound,
@@ -43,6 +44,7 @@ from packages.valory.skills.hello_world_abci.rounds import (
     ResetAndPauseRound,
     SelectKeeperRound,
     SynchronizedData,
+    PrintCountRound,
 )
 
 
@@ -190,15 +192,49 @@ class PrintMessageBehaviour(HelloWorldABCIBaseBehaviour, ABC):
             == self.synchronized_data.most_voted_keeper_address
         ):
             message = self.params.hello_world_string
+            owner = self.params.owner_address_string
         else:
             message = ":|"
+            owner = ":|"
 
-        printed_message = f"Agent {self.context.agent_name} (address {self.context.agent_address}) in period {self.synchronized_data.period_count} says: {message}"
+        printed_message = f"Agent {self.context.agent_name} (address {self.context.agent_address}) in period {self.synchronized_data.period_count} says: {message}, owner's address is {owner}"
 
         print(printed_message)
         self.context.logger.info(f"printed_message={printed_message}")
 
         payload = PrintMessagePayload(self.context.agent_address, printed_message)
+
+        yield from self.send_a2a_transaction(payload)
+        yield from self.wait_until_round_end()
+
+        self.set_done()
+
+
+class PrintCountBehaviour(HelloWorldABCIBaseBehaviour, ABC):
+    """Prints the celebrated 'HELLO WORLD!' message."""
+
+    matching_round = PrintCountRound
+
+    def async_act(self) -> Generator:
+        """
+        Do the action.
+
+        Steps:
+        - Determine if this agent is the current keeper agent.
+        - Print the appropriate to the local console.
+        - Send the transaction with the printed message and wait for it to be mined.
+        - Wait until ABCI application transitions to the next round.
+        - Go to the next behaviour (set done event).
+        """
+
+        print_count = self.synchronized_data.print_count
+        
+        printed_message = f"The message has been printed {print_count} times"
+
+        print(printed_message)
+        self.context.logger.info(f"printed_message={printed_message}")
+
+        payload = PrintCountPayload(self.context.agent_address, self.synchronized_data.print_count)
 
         yield from self.send_a2a_transaction(payload)
         yield from self.wait_until_round_end()
@@ -251,5 +287,6 @@ class HelloWorldRoundBehaviour(AbstractRoundBehaviour):
         CollectRandomnessBehaviour,  # type: ignore
         SelectKeeperBehaviour,  # type: ignore
         PrintMessageBehaviour,  # type: ignore
+        PrintCountBehaviour,  # type: ignore
         ResetAndPauseBehaviour,  # type: ignore
     }
